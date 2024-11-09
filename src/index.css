@@ -10,3 +10,17 @@ body {
   margin: 0;
   padding: 0;
 }
+
+.drop-zone {
+  padding: 20px;
+  border: 2px dashed #888;
+  border-radius: 0.7rem;
+  text-align: center;
+  transition: background-color 0.3s ease;
+  cursor: pointer;
+}
+
+.drop-zone.dragging {
+  background-color: #e0e7ff;
+  border-color: #4f46e5;
+}

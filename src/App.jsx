@@ -1,16 +1,37 @@
 import { useState } from "react";
 import imageCompression from "browser-image-compression";
+import JSZip from "jszip";
 
 function App() {
-  const [image, setImage] = useState(null);
-  const [convertedImageUrl, setConvertedImageUrl] = useState(null);
+  const [images, setImages] = useState([]);
+  const [convertedImages, setConvertedImages] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleFiles = (files) => {
+    setImages((prevImages) => [...prevImages, ...Array.from(files)]);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFiles(e.dataTransfer.files);
+  };
 
   const handleImageChange = (e) => {
-    setImage(e.target.files[0]);
+    handleFiles(e.target.files);
   };
 
   const handleConvert = async () => {
-    if (!image) return;
+    if (images.length === 0) return;
 
     const options = {
       maxSizeMB: 1,
@@ -20,51 +41,104 @@ function App() {
     };
 
     try {
-      const compressedImage = await imageCompression(image, options);
-      const convertedImageUrl = URL.createObjectURL(compressedImage);
-      setConvertedImageUrl(convertedImageUrl);
+      const converted = await Promise.all(
+        images.map(async (image) => {
+          const compressedImage = await imageCompression(image, options);
+          return {
+            name: image.name.split(".")[0] + ".webp",
+            file: compressedImage,
+          };
+        })
+      );
+
+      setConvertedImages(converted);
     } catch (error) {
-      console.error("Error al convertir la imagen:", error);
+      console.error("Error al convertir las imágenes:", error);
     }
   };
 
-  const handleDownload = () => {
-    if (convertedImageUrl) {
-      const link = document.createElement("a");
-      link.href = convertedImageUrl;
-      link.download = "converted.webp";
-      link.click();
+  const handleDownload = async () => {
+    if (convertedImages.length === 0) return;
 
-      setTimeout(() => window.location.reload(), 1500);
-    }
+    const zip = new JSZip();
+    convertedImages.forEach(({ name, file }) => {
+      zip.file(name, file);
+    });
+
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    const zipUrl = URL.createObjectURL(zipBlob);
+
+    const link = document.createElement("a");
+    link.href = zipUrl;
+    link.download = "converted_images.zip";
+    link.click();
+
+    setTimeout(() => {
+      URL.revokeObjectURL(zipUrl);
+      window.location.reload();
+    }, 500);
   };
 
   return (
-    <div className="bg-blue flex flex-col justify-center items-center min-h-screen">
-      <div className="flex flex-col justify-center items-center gap-5 border-2 border-border px-11 py-28 rounded-xl">
+    <div className="min-h-screen bg-blue-medium flex flex-col justify-center items-center">
+      <div className="flex flex-col justify-center items-center gap-5 border-2 border-border px-11 py-28 rounded-2xl">
         <h1 className="text-5xl font-bold text-center text-white">
-          Convertir Imagen a WebP
+          Convertir Imágenes a WebP
         </h1>
-        <input
-          className="w-72 border border-border rounded px-3 py-2 text-white font-semibold"
-          type="file"
-          accept="image/*"
-          onChange={handleImageChange}
-        />
+
+        <div
+          className={`flex flex-col gap-4 drop-zone ${isDragging ? "dragging" : ""}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <p className="text-golden font-bold">
+            Arrastra y suelta las imágenes aquí, o
+          </p>
+          <input
+            className="hidden"
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleImageChange}
+          />
+          <button
+            className="text-white underline font-bold"
+            onClick={() => document.querySelector('input[type="file"]').click()}
+          >
+            Seleccionar imágenes
+          </button>
+        </div>
+
+        <div className="h-24 mb-4">
+          {images.length > 0 && (
+            <div className="bg-blue-light p-3 rounded-lg">
+              <p className="flex flex-col items-center gap-1 text-xl text-white text-center">
+                <span className="text-golden font-bold text-3xl">
+                  {images.length}{" "}
+                </span>
+                {images.length === 1 ? "Imagen añadida" : "Imágenes añadidas"}{" "}
+                correctamente.
+              </p>
+            </div>
+          )}
+        </div>
+
         <button
           className="bg-golden text-blue border border-transparent rounded px-3 py-2 font-semibold hover:bg-blue hover:text-golden hover:border-border disabled:cursor-no-drop disabled:bg-grey-400 disabled:opacity-80 disabled:text-white"
+          disabled={images.length === 0}
           onClick={handleConvert}
-          disabled={!image}
         >
           Convertir a WebP
         </button>
+
         <div className="h-7">
-          {convertedImageUrl && (
+          {convertedImages.length > 0 && (
             <button
               className="text-white text-2xl underline font-semibold hover:text-golden"
               onClick={handleDownload}
             >
-              Descargar imagen convertida
+              Descargar todas las imágenes (.zip)
             </button>
           )}
         </div>
