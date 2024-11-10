@@ -9,6 +9,9 @@
 body {
   margin: 0;
   padding: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-height: 100dvh;
 }
 
 .drop-zone {
@@ -23,4 +26,24 @@ body {
 .drop-zone.dragging {
   background-color: #e0e7ff;
   border-color: #4f46e5;
+}
+
+footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem;
+  background-color: #fbbf24;
+}
+
+.footer-text {
+  font-size: 1.1rem;
+  color: #1f2937;
+}
+
+.footer-span {
+  font-size: 1.3rem;
+  color: #202a37;
+  font-weight: bold;
 }

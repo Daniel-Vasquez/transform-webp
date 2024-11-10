@@ -1,6 +1,7 @@
 import { useState } from "react";
 import imageCompression from "browser-image-compression";
 import JSZip from "jszip";
+import { LogoZip } from "./components/LogoZip";
 
 function App() {
   const [images, setImages] = useState([]);
@@ -80,9 +81,9 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-blue-medium flex flex-col justify-center items-center">
-      <div className="flex flex-col justify-center items-center gap-5 border-2 border-border px-11 py-28 rounded-2xl">
-        <h1 className="text-5xl font-bold text-center text-white">
+    <div className="h-full bg-blue-medium flex flex-col justify-center items-center">
+      <div className="flex flex-col justify-center items-center gap-5 border-0 md:border-2 border-border px-4 py-7 md:px-11 md:py-28 rounded-2xl">
+        <h1 className="text-2xl font-bold text-center text-white md:text-5xl">
           Convertir Imágenes a WebP
         </h1>
 
@@ -135,10 +136,11 @@ function App() {
         <div className="h-7">
           {convertedImages.length > 0 && (
             <button
-              className="text-white text-2xl underline font-semibold hover:text-golden"
+              className="flex justify-center items-center gap-3 text-white text-2xl underline font-semibold hover:text-golden"
               onClick={handleDownload}
             >
-              Descargar todas las imágenes (.zip)
+              Descargar
+              <LogoZip className="w-8 h-8"/>
             </button>
           )}
         </div>
