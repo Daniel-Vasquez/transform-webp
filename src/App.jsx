@@ -88,7 +88,9 @@ function App() {
         </h1>
 
         <div
-          className={`flex flex-col gap-4 drop-zone ${isDragging ? "dragging" : ""}`}
+          className={`flex flex-col gap-4 drop-zone ${
+            isDragging ? "dragging" : ""
+          }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -96,6 +98,16 @@ function App() {
           <p className="text-golden font-bold">
             Arrastra y suelta las imágenes aquí, o
           </p>
+
+          {images.length > 0 && (
+            <p className="bg-blue py-3 rounded-lg flex items-center justify-center gap-1 text-lg text-white text-center">
+              <span className="text-golden font-bold text-2xl">
+                {images.length}{" "}
+              </span>
+              {images.length === 1 ? "Imagen añadida" : "Imágenes añadidas"}.
+            </p>
+          )}
+
           <input
             className="hidden"
             type="file"
@@ -109,20 +121,6 @@ function App() {
           >
             Seleccionar imágenes
           </button>
-        </div>
-
-        <div className="h-24 mb-4">
-          {images.length > 0 && (
-            <div className="bg-blue-light p-3 rounded-lg">
-              <p className="flex flex-col items-center gap-1 text-xl text-white text-center">
-                <span className="text-golden font-bold text-3xl">
-                  {images.length}{" "}
-                </span>
-                {images.length === 1 ? "Imagen añadida" : "Imágenes añadidas"}{" "}
-                correctamente.
-              </p>
-            </div>
-          )}
         </div>
 
         <button
@@ -139,8 +137,8 @@ function App() {
               className="flex justify-center items-center gap-3 text-white text-2xl underline font-semibold hover:text-golden"
               onClick={handleDownload}
             >
-              Descargar
-              <LogoZip className="w-8 h-8"/>
+              Descargar imágenes
+              <LogoZip className="w-8 h-8" />
             </button>
           )}
         </div>
