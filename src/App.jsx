@@ -260,6 +260,9 @@ function App() {
         <h1 className="text-2xl font-bold text-center text-white md:text-5xl">
           Convertir Imágenes a WebP
         </h1>
+        <p className="text-grey-300 text-center text-sm md:text-base -mt-2">
+          🔒 La conversión ocurre en tu navegador: tus imágenes nunca salen de tu dispositivo.
+        </p>
 
         <div
           className={`w-full flex flex-col gap-4 drop-zone ${
@@ -277,6 +280,12 @@ function App() {
             Arrastra y suelta las imágenes aquí, o
           </p>
 
+          {images.length === 0 && (
+            <p className="text-grey-300 text-xs -mt-2">
+              JPG, PNG, GIF, BMP o WebP · sin límite de cantidad
+            </p>
+          )}
+
           {images.length > 0 && (
             <p
               className="bg-blue py-3 rounded-lg flex items-center justify-center gap-1 text-lg text-white text-center"
@@ -291,6 +300,7 @@ function App() {
 
           <input
             ref={inputRef}
+            id="file-input"
             className="hidden"
             type="file"
             accept="image/*"
@@ -298,9 +308,17 @@ function App() {
             onChange={handleImageChange}
             tabIndex={-1}
           />
-          <span className="text-white underline font-bold">
+          <label
+            htmlFor="file-input"
+            className="text-white underline font-bold cursor-pointer"
+            onClick={(e) => {
+              // El label ya abre el selector; evita que la zona lo abra otra vez
+              e.stopPropagation();
+              if (isConverting) e.preventDefault();
+            }}
+          >
             Seleccionar imágenes
-          </span>
+          </label>
         </div>
 
         {notices.length > 0 && (
@@ -477,7 +495,7 @@ function App() {
 
         {!hasResults && (
           <button
-            className="bg-golden text-blue border border-transparent rounded px-3 py-2 font-semibold hover:bg-blue hover:text-golden hover:border-border disabled:cursor-no-drop disabled:bg-grey-400 disabled:opacity-80 disabled:text-white disabled:hover:border-transparent"
+            className="bg-golden text-blue border border-transparent rounded px-3 py-2 font-semibold hover:bg-blue hover:text-golden hover:border-border disabled:cursor-not-allowed disabled:bg-blue-light disabled:text-grey-300 disabled:border-border"
             disabled={images.length === 0 || isConverting}
             onClick={handleConvert}
           >

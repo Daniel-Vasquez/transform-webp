@@ -26,7 +26,15 @@ body {
 .drop-zone:hover,
 .drop-zone:focus-visible {
   border-color: #fbbf24;
-  outline: none;
+}
+
+/* Indicador de foco visible para navegación por teclado */
+button:focus-visible,
+label:focus-visible,
+input:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid #fbbf24;
+  outline-offset: 2px;
 }
 
 .drop-zone.dragging {
