@@ -3,6 +3,9 @@ import imageCompression from "browser-image-compression";
 import JSZip from "jszip";
 import { LogoZip } from "./components/LogoZip";
 
+const MAX_DIMENSION = 1920;
+const MAX_SIZE_MB = 1;
+
 const formatBytes = (bytes) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -12,14 +15,32 @@ const formatBytes = (bytes) => {
 const savingPercent = (original, converted) =>
   original > 0 ? Math.round((1 - converted / original) * 100) : 0;
 
+// "foto.final.jpg" -> "foto.final.webp" (solo se reemplaza la última extensión)
+const toWebpName = (name) => name.replace(/\.[^.]+$/, "") + ".webp";
+
+const fileKey = (file) => `${file.name}-${file.size}-${file.lastModified}`;
+
+const downloadBlob = (blob, filename) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+};
+
 function App() {
   const [images, setImages] = useState([]);
   const [convertedImages, setConvertedImages] = useState([]);
   const [errors, setErrors] = useState([]);
+  const [notices, setNotices] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [downloaded, setDownloaded] = useState(false);
+  const [keepOriginalSize, setKeepOriginalSize] = useState(false);
+  const [quality, setQuality] = useState(0.8);
+  const inputRef = useRef(null);
   const imagesRef = useRef(images);
   imagesRef.current = images;
 
@@ -30,13 +51,74 @@ function App() {
     };
   }, []);
 
+  // Evita que soltar un archivo fuera de la zona navegue a la imagen,
+  // y resalta la zona en cuanto entra un arrastre a la ventana.
+  useEffect(() => {
+    const onDragOver = (e) => {
+      e.preventDefault();
+      setIsDragging(true);
+    };
+    const onDragLeave = (e) => {
+      // relatedTarget es null cuando el cursor sale de la ventana
+      if (e.relatedTarget === null) setIsDragging(false);
+    };
+    const onDrop = (e) => {
+      e.preventDefault();
+      setIsDragging(false);
+    };
+
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, []);
+
   const handleFiles = (files) => {
-    const newImages = Array.from(files).map((file) => ({
-      id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
-      file,
-      previewUrl: URL.createObjectURL(file),
-    }));
-    setImages((prevImages) => [...prevImages, ...newImages]);
+    const existingKeys = new Set(images.map((img) => fileKey(img.file)));
+    const accepted = [];
+    const notImages = [];
+    let duplicates = 0;
+
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith("image/")) {
+        notImages.push(file.name);
+        return;
+      }
+      const key = fileKey(file);
+      if (existingKeys.has(key)) {
+        duplicates += 1;
+        return;
+      }
+      existingKeys.add(key);
+      accepted.push({
+        id: `${key}-${Math.random()}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      });
+    });
+
+    const newNotices = [];
+    if (notImages.length > 0) {
+      newNotices.push(
+        `${notImages.length === 1 ? "1 archivo ignorado" : `${notImages.length} archivos ignorados`} por no ser ${notImages.length === 1 ? "una imagen" : "imágenes"}: ${notImages.join(", ")}`
+      );
+    }
+    if (duplicates > 0) {
+      newNotices.push(
+        duplicates === 1
+          ? "1 imagen duplicada omitida."
+          : `${duplicates} imágenes duplicadas omitidas.`
+      );
+    }
+    setNotices(newNotices);
+
+    if (accepted.length === 0) return;
+
+    setImages((prevImages) => [...prevImages, ...accepted]);
     // Cualquier conversión anterior queda obsoleta al añadir imágenes nuevas
     setConvertedImages([]);
     setErrors([]);
@@ -58,43 +140,51 @@ function App() {
     setImages([]);
     setConvertedImages([]);
     setErrors([]);
+    setNotices([]);
     setProgress({ done: 0, total: 0 });
     setDownloaded(false);
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
+  const openFilePicker = () => {
+    if (!isConverting) inputRef.current?.click();
   };
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
+  const handleDropZoneKeyDown = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openFilePicker();
+    }
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFiles(e.dataTransfer.files);
+    if (!isConverting) handleFiles(e.dataTransfer.files);
   };
 
   const handleImageChange = (e) => {
     handleFiles(e.target.files);
+    // Permite volver a seleccionar el mismo archivo tras quitarlo
+    e.target.value = "";
   };
 
   const handleConvert = async () => {
     if (images.length === 0 || isConverting) return;
 
     const options = {
-      maxSizeMB: 1,
-      maxWidthOrHeight: 1920,
       useWebWorker: true,
       fileType: "image/webp",
+      initialQuality: quality,
+      ...(keepOriginalSize
+        ? { maxSizeMB: Number.POSITIVE_INFINITY }
+        : { maxSizeMB: MAX_SIZE_MB, maxWidthOrHeight: MAX_DIMENSION }),
     };
 
     setIsConverting(true);
     setProgress({ done: 0, total: images.length });
     setConvertedImages([]);
     setErrors([]);
+    setNotices([]);
     setDownloaded(false);
 
     const results = await Promise.allSettled(
@@ -103,7 +193,7 @@ function App() {
           const compressedImage = await imageCompression(file, options);
           return {
             id,
-            name: file.name.split(".")[0] + ".webp",
+            name: toWebpName(file.name),
             originalName: file.name,
             originalSize: file.size,
             file: compressedImage,
@@ -133,8 +223,19 @@ function App() {
     setIsConverting(false);
   };
 
+  const handleDownloadSingle = ({ name, file }) => {
+    downloadBlob(file, name);
+    setDownloaded(true);
+  };
+
   const handleDownload = async () => {
     if (convertedImages.length === 0) return;
+
+    // Con una sola imagen no tiene sentido obligar a descomprimir un ZIP
+    if (convertedImages.length === 1) {
+      handleDownloadSingle(convertedImages[0]);
+      return;
+    }
 
     const zip = new JSZip();
     convertedImages.forEach(({ name, file }) => {
@@ -142,14 +243,7 @@ function App() {
     });
 
     const zipBlob = await zip.generateAsync({ type: "blob" });
-    const zipUrl = URL.createObjectURL(zipBlob);
-
-    const link = document.createElement("a");
-    link.href = zipUrl;
-    link.download = "converted_images.zip";
-    link.click();
-
-    setTimeout(() => URL.revokeObjectURL(zipUrl), 500);
+    downloadBlob(zipBlob, "converted_images.zip");
     setDownloaded(true);
   };
 
@@ -158,6 +252,7 @@ function App() {
   const totalOriginal = convertedImages.reduce((sum, img) => sum + img.originalSize, 0);
   const totalConverted = convertedImages.reduce((sum, img) => sum + img.file.size, 0);
   const hasResults = convertedImages.length > 0 || errors.length > 0;
+  const isSingleDownload = convertedImages.length === 1;
 
   return (
     <div className="h-full bg-blue-medium flex flex-col justify-center items-center">
@@ -169,9 +264,13 @@ function App() {
         <div
           className={`w-full flex flex-col gap-4 drop-zone ${
             isDragging ? "dragging" : ""
-          }`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
+          } ${isConverting ? "cursor-not-allowed opacity-60" : ""}`}
+          role="button"
+          tabIndex={0}
+          aria-label="Arrastra imágenes aquí o pulsa para seleccionarlas"
+          aria-disabled={isConverting}
+          onClick={openFilePicker}
+          onKeyDown={handleDropZoneKeyDown}
           onDrop={handleDrop}
         >
           <p className="text-golden font-bold">
@@ -191,19 +290,29 @@ function App() {
           )}
 
           <input
+            ref={inputRef}
             className="hidden"
             type="file"
             accept="image/*"
             multiple
             onChange={handleImageChange}
+            tabIndex={-1}
           />
-          <button
-            className="text-white underline font-bold"
-            onClick={() => document.querySelector('input[type="file"]').click()}
-          >
+          <span className="text-white underline font-bold">
             Seleccionar imágenes
-          </button>
+          </span>
         </div>
+
+        {notices.length > 0 && (
+          <div
+            className="w-full bg-golden/10 border border-golden rounded-lg p-3 text-left text-sm text-white"
+            role="status"
+          >
+            {notices.map((notice) => (
+              <p key={notice}>{notice}</p>
+            ))}
+          </div>
+        )}
 
         {images.length > 0 && (
           <ul className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -237,15 +346,24 @@ function App() {
                       {file.name}
                     </p>
                     {converted ? (
-                      <p className="text-grey-300">
-                        <span className="line-through">
-                          {formatBytes(converted.originalSize)}
-                        </span>{" "}
-                        → <span className="text-white">{formatBytes(converted.file.size)}</span>{" "}
-                        <span className="text-golden font-bold">
-                          −{savingPercent(converted.originalSize, converted.file.size)}%
-                        </span>
-                      </p>
+                      <>
+                        <p className="text-grey-300">
+                          <span className="line-through">
+                            {formatBytes(converted.originalSize)}
+                          </span>{" "}
+                          → <span className="text-white">{formatBytes(converted.file.size)}</span>{" "}
+                          <span className="text-golden font-bold">
+                            −{savingPercent(converted.originalSize, converted.file.size)}%
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          className="mt-1 text-golden underline hover:text-white"
+                          onClick={() => handleDownloadSingle(converted)}
+                        >
+                          Descargar
+                        </button>
+                      </>
                     ) : error ? (
                       <p className="text-red-400" title={error.message}>
                         No se pudo convertir
@@ -258,6 +376,46 @@ function App() {
               );
             })}
           </ul>
+        )}
+
+        {!hasResults && (
+          <fieldset
+            className="w-full bg-blue rounded-lg p-4 flex flex-col gap-3 text-left text-sm text-white"
+            disabled={isConverting}
+          >
+            <legend className="sr-only">Opciones de conversión</legend>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="accent-golden w-4 h-4"
+                checked={keepOriginalSize}
+                onChange={(e) => setKeepOriginalSize(e.target.checked)}
+              />
+              Mantener la resolución original
+            </label>
+            <p className="text-grey-300 text-xs -mt-1 ml-6">
+              {keepOriginalSize
+                ? "No se cambiará el tamaño ni se limitará el peso; solo se aplica la calidad elegida."
+                : `Las imágenes de más de ${MAX_DIMENSION} px se reducirán a ese tamaño y se comprimirán hasta ~${MAX_SIZE_MB} MB.`}
+            </p>
+
+            <label className="flex flex-col gap-1">
+              <span className="flex justify-between">
+                <span>Calidad</span>
+                <span className="text-golden font-bold">{Math.round(quality * 100)}%</span>
+              </span>
+              <input
+                type="range"
+                className="accent-golden w-full"
+                min="0.1"
+                max="1"
+                step="0.05"
+                value={quality}
+                onChange={(e) => setQuality(Number(e.target.value))}
+              />
+            </label>
+          </fieldset>
         )}
 
         {isConverting && (
@@ -334,13 +492,13 @@ function App() {
                 className="flex justify-center items-center gap-3 text-white text-2xl underline font-semibold hover:text-golden"
                 onClick={handleDownload}
               >
-                Descargar imágenes
-                <LogoZip className="w-8 h-8" />
+                {isSingleDownload ? "Descargar imagen" : "Descargar todas en ZIP"}
+                {!isSingleDownload && <LogoZip className="w-8 h-8" />}
               </button>
             )}
             {downloaded && (
               <p className="text-golden font-semibold" aria-live="polite">
-                ✓ ZIP descargado
+                ✓ Descarga iniciada
               </p>
             )}
             <button
